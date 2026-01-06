@@ -1,5 +1,5 @@
-# Laboratorium – Programowanie Full-Stack w Chmurze Obliczeniowej  
-# Zadanie nr 1 – Część obowiązkowa
+# Laboratorium - Programowanie Full-Stack w Chmurze Obliczeniowej  
+# Zadanie nr 1 - Część obowiązkowa
 
 W ramach zadania utworzono klaster Kubernetes w oparciu o Minikube z wtyczką sieciową CNI Calico oraz sterownikiem Docker. Klaster składa się z węzła głównego (master) oraz trzech węzłów roboczych A, B oraz C.
 
@@ -37,17 +37,17 @@ Dla Deploymentu frontend skonfigurowano autoskaler HPA, który dynamicznie skalu
 
 Pliki w repozytorium:
 
-- 01-frontend-deploy.yaml – Deployment frontend
-- 02-backend-deploy.yaml – Deployment backend
-- 03-mysql-pod.yaml – Pod my-sql
-- 04-frontend-svc-nodeport.yaml – Service svc-frontend
-- 05-backend-svc-clusterip.yaml – Service svc-backend
-- 06-mysql-svc-clusterip.yaml – Service svc-mysql
-- 07-netpol-frontend.yaml – NetworkPolicy dla frontend
-- 08-netpol-backend.yaml – NetworkPolicy dla backend
-- 09-frontend-quota.yaml – ResourceQuota dla frontend
-- 10-backend-quota.yaml – ResourceQuota dla backend
-- 11-hpa-frontend.yaml – Horizontal Pod Autoscaler
+- 01-frontend-deploy.yaml - Deployment frontend
+- 02-backend-deploy.yaml - Deployment backend
+- 03-mysql-pod.yaml - Pod my-sql
+- 04-frontend-svc-nodeport.yaml - Service svc-frontend
+- 05-backend-svc-clusterip.yaml - Service svc-backend
+- 06-mysql-svc-clusterip.yaml - Service svc-mysql
+- 07-netpol-frontend.yaml - NetworkPolicy dla frontend
+- 08-netpol-backend.yaml - NetworkPolicy dla backend
+- 09-frontend-quota.yaml - ResourceQuota dla frontend
+- 10-backend-quota.yaml - ResourceQuota dla backend
+- 11-hpa-frontend.yaml - Horizontal Pod Autoscaler
 
 # 1) Start klastra (Calico + 4 nody: master + A,B,C)
 
@@ -86,3 +86,33 @@ W celu zweryfikowania poprawności konfiguracji oraz działania autoskalera HPA 
 Test potwierdził poprawne działanie konfiguracji NetworkPolicy, ResourceQuota oraz HPA.
 
 # [Potwierdzenie działania na zrzutach ekranu zapisanych w katalogu "zrzuty_ekranu"]
+
+
+# Część nieobowiązkowa - odpowiedzi
+
+# 1) Czy możliwa jest aktualizacja aplikacji frontend, gdy działa HPA?
+
+TAK.
+
+Horizontal Pod Autoscaler nie blokuje aktualizacji Deploymentu (np. zmiany wersji obrazu kontenera). Aktualizacja jest realizowana przez mechanizm rollout w Deployment, natomiast HPA w tym czasie nadal kontroluje liczbę replik.
+
+Dokumentacja:
+https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/#how-does-a-horizontalpodautoscaler-work
+
+# 2) Strategia rollingUpdate i spełnienie warunków
+
+W celu zapewnienia, że podczas aktualizacji zawsze będą działały co najmniej 2 pody frontend oraz nie zostaną przekroczone limity zasobów przestrzeni nazw frontend, zastosowano następującą strategię:
+
+strategy:
+- type: RollingUpdate
+- maxUnavailable: 0
+- maxSurge: 1
+
+Ustawienie maxUnavailable: 0 gwarantuje, że w trakcie aktualizacji nie zostanie wyłączony żaden pod, dopóki nowy nie będzie gotowy, co zapewnia ciągłość działania aplikacji. Parametr maxSurge: 1 pozwala na uruchomienie jednego dodatkowego poda podczas aktualizacji.
+
+Aby nie przekroczyć limitu maksymalnej liczby 10 podów w przestrzeni nazw frontend, w autoskalerze HPA ustawiono:
+- minReplicas: 2
+- maxReplicas: 9
+
+Dzięki temu nawet w trakcie aktualizacji (9 podów + 1 pod z maxSurge) limit przestrzeni nazw nie zostanie przekroczony, a aplikacja zachowa wysoką dostępność.
+
